@@ -54,11 +54,11 @@ OUTPUT_DETAIL_COLUMNS: List[str] = [
 
 # Extra audit / detail columns included in the default export.
 OUTPUT_AUDIT_COLUMNS: List[str] = [
+    "Source File",
     "Task Key",
     "Task Type",
     "Change/New",
     "Professional Level",
-    "Validation Issues",
 ]
 
 # Display precision defaults.

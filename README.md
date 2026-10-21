@@ -1,21 +1,23 @@
 # Productivity Report Analyzer
 
-Compare an employee **Productivity Report** against a customer **Standard** effort table, calculate task-level productivity, review validation issues, and export an Excel report.
+Compare one or more employee **Productivity Reports** against a shared customer **Standard** effort table, calculate task-level productivity, review validation issues, and export each report as its own Excel workbook.
 
-Designed for non-technical users on Windows: upload Excel files, confirm column mappings, calculate, and download results.
+Designed for non-technical users on Windows: upload Excel files, confirm column mappings, calculate, browse each report, and download results.
 
 ## Features
 
-- Upload Productivity Report, Standard (kept in session — upload once), and optional Output Template
+- Upload **multiple** Productivity Reports in one batch, plus one shared Standard (kept in session) and optional Output Template
+- Independent productivity calculation per source file, plus combined totals across all files
+- Browse individual reports with a modern slider / prev–next interface
+- Filter and review all task-level results (including Source File)
 - Worksheet selection for multi-sheet workbooks
-- Editable column mapping with required-column validation
+- Editable column mapping with required-column validation across all uploaded reports
 - Normalization of `TaskType_`, `Complexity_`, and New/Change values
 - Robust EffortManday parsing (`1`, `"1.5"`, `EffortManday_1`, …)
 - Professional level detection (Associate / Specialist / Professional) with configurable coefficients
 - Task-level productivity and Effort For Specialist
-- Validation issues for missing/ambiguous standards, invalid effort, unknown levels
-- Overall **weighted** productivity (Σ standard ÷ Σ actual × 100)
-- Excel export with detail, summary, validation, and standard reference sheets
+- Validation issues for missing/ambiguous standards, invalid effort, unknown levels — tagged by source file
+- Excel export: download **each report individually**
 
 ## Requirements
 
@@ -25,7 +27,7 @@ Designed for non-technical users on Windows: upload Excel files, confirm column 
 ## Setup (Windows)
 
 ```powershell
-cd "C:\Users\LG CNS\Desktop\AI_PJ\CompareTool"
+cd "C:\Users\usernam\Desktop\AI_PJ\CompareTool"
 python -m venv .venv
 .\.venv\Scripts\activate
 pip install -r requirements.txt
@@ -48,16 +50,16 @@ pytest -q
 ## How to use
 
 1. **Upload files**
-   - **Productivity Report** — employee tasks (required each run)
-   - **Standard** — approved standard effort table (upload once; kept until replaced)
+   - **Productivity Report(s)** — one or many employee task files
+   - **Standard** — shared approved standard effort table (upload once; kept until replaced)
    - **Output Template** — optional layout for the export
-2. **Select worksheets** if a workbook has more than one sheet.
-3. **Confirm column mapping** — defaults match the sample files; override if your headers differ.
-4. **Review data preview** — row counts, sample rows, detected levels.
-5. **Adjust coefficients / decimal places** if needed (defaults: Associate 90, Specialist 100, Professional 143).
-6. Click **Calculate Productivity**.
-7. Review the detail table and validation issues.
-8. Click **Download Excel Report**.
+2. **Select worksheets** for each uploaded report (and Standard / Template).
+3. **Confirm column mapping** — applies to all reports; each file must contain the mapped headers.
+4. **Review data preview** — per-file row counts and sample rows.
+5. **Adjust coefficients / decimal places** if needed ().
+6. Click **Calculate Productivity** — runs independently per file and builds a combined summary.
+7. **Browse by report** with the slider, or open **All results combined** to filter every task.
+8. Download each report individually from the Export section.
 
 ## Calculation formulas
 
