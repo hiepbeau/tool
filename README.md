@@ -104,7 +104,7 @@ CSV uploads are supported for Productivity Report and Standard. CSV does **not**
 ## Limitations
 
 - `.xlsm` macros are never executed; VBA is not preserved on export.
-- Output Template columns that have no source mapping (e.g. VNB Team, Project Code) are left blank; calculated fields are written into matching headers.
+- Output Template columns that have no source mapping (e.g.) are left blank; calculated fields are written into matching headers.
 - The primary detail sheet is **one row per source task** (not aggregated), even if the sample Output Template shows aggregated Task Count rows.
 - Productivity is exported as a **percentage** (e.g. 200), per the business rules — not as a 0–1 ratio.
 - Password-protected workbooks are not supported.
