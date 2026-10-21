@@ -27,7 +27,7 @@ Designed for non-technical users on Windows: upload Excel files, confirm column 
 ## Setup (Windows)
 
 ```powershell
-cd "C:\Users\LG CNS\Desktop\AI_PJ\CompareTool"
+cd "C:\Users\usernam\Desktop\AI_PJ\CompareTool"
 python -m venv .venv
 .\.venv\Scripts\activate
 pip install -r requirements.txt
