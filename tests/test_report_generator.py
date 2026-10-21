@@ -90,7 +90,12 @@ def test_export_worksheets_and_columns():
         assert col in headers
 
     # Excluded from export
-    for col in ("Source Row", "Employee Coefficient", "Validation Status"):
+    for col in (
+        "Source Row",
+        "Employee Coefficient",
+        "Validation Status",
+        "Validation Issues",
+    ):
         assert col not in headers
 
     # Column order: required detail columns appear in the specified order.
@@ -111,10 +116,9 @@ def test_export_worksheets_and_columns():
     assert isinstance(ws.cell(2, specialist_col).value, (int, float))
     assert ws.cell(2, specialist_col).value == pytest.approx(1.43)
 
-    # Invalid task preserved
+    # Invalid task preserved (row still exported; productivity blank)
     assert ws.max_row >= 3
-    issues_col = headers.index("Validation Issues") + 1
-    assert ws.cell(3, issues_col).value  # has issues text
+    assert ws.cell(3, prod_col).value in (None, "")
 
     # Reopen successfully
     wb2 = openpyxl.load_workbook(io.BytesIO(data))

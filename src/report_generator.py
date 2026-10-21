@@ -12,13 +12,19 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.utils.dataframe import dataframe_to_rows
 
+from .batch_processor import BatchResult, per_file_summary_table
 from .configuration import OUTPUT_AUDIT_COLUMNS, OUTPUT_DETAIL_COLUMNS, AppConfig
 from .productivity_calculator import CalculationResult, round_for_display
 from .validators import StandardLookup
 
 # Columns omitted from every exported worksheet.
 EXPORT_EXCLUDED_COLUMNS = frozenset(
-    {"Source Row", "Employee Coefficient", "Validation Status"}
+    {
+        "Source Row",
+        "Employee Coefficient",
+        "Validation Status",
+        "Validation Issues",
+    }
 )
 
 # Maps template header → detail column name.
@@ -69,8 +75,96 @@ def generate_report_bytes(
     return _export_default(detail, result, standard_lookup, cfg)
 
 
+def generate_consolidated_report_bytes(
+    batch: BatchResult,
+    config: Optional[AppConfig] = None,
+    template_bytes: Optional[bytes] = None,
+    template_sheet: Optional[str] = None,
+) -> bytes:
+    """
+    Export a consolidated workbook for a multi-file batch.
+
+    Includes combined Productivity Detail (with Source File), combined Summary,
+    Per-File Summary, Validation Issues, and Standard Reference.
+    """
+    if batch.combined is None or batch.standard_lookup is None:
+        raise ValueError("Batch result has no combined calculation to export.")
+
+    cfg = config or AppConfig()
+    # Prefer default layout for consolidated so Source File is preserved.
+    detail = round_for_display(batch.combined.detail, cfg)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Productivity Detail"
+    export_cols = _default_detail_columns(detail)
+    _write_dataframe(ws, detail[export_cols], cfg)
+
+    _append_support_sheets(wb, detail, batch.combined, batch.standard_lookup, cfg)
+
+    # Insert Per-File Summary after Summary if multiple files.
+    if batch.file_count > 1:
+        per_file = per_file_summary_table(batch, cfg)
+        # Place after Summary sheet.
+        ws_pf = wb.create_sheet("Per-File Summary", 2 if "Summary" in wb.sheetnames else None)
+        _write_dataframe(ws_pf, per_file, cfg)
+
+    # Optional: also write a template-formatted sheet when a template is provided.
+    if template_bytes:
+        try:
+            _append_template_sheet(
+                wb,
+                detail=detail,
+                template_bytes=template_bytes,
+                template_sheet=template_sheet,
+                config=cfg,
+            )
+        except TemplateExportError:
+            pass
+
+    return _workbook_to_bytes(wb)
+
+
 class TemplateExportError(Exception):
     """Raised when a template cannot be safely used."""
+
+
+def _append_template_sheet(
+    wb: Workbook,
+    detail: pd.DataFrame,
+    template_bytes: bytes,
+    template_sheet: Optional[str],
+    config: AppConfig,
+) -> None:
+    """Append a template-styled detail sheet into an existing workbook."""
+    tpl = load_workbook(io.BytesIO(template_bytes))
+    sheet_name = template_sheet or tpl.sheetnames[0]
+    if sheet_name not in tpl.sheetnames:
+        raise TemplateExportError(f"Template sheet '{sheet_name}' not found.")
+    src = tpl[sheet_name]
+    dest = wb.create_sheet("Template Layout")
+    # Copy header
+    headers = _read_header_row(src)
+    for col_idx, header in headers.items():
+        dest.cell(row=1, column=col_idx, value=header)
+    num_formats = _infer_number_formats(headers)
+    for r_idx in range(len(detail)):
+        excel_row = r_idx + 2
+        record = detail.iloc[r_idx]
+        for col_idx, header in headers.items():
+            source_col = TEMPLATE_COLUMN_MAP.get(header)
+            value: Any = None
+            if source_col and source_col in record.index:
+                value = record[source_col]
+                if pd.isna(value):
+                    value = None
+            cell = dest.cell(
+                row=excel_row,
+                column=col_idx,
+                value=_excel_value(value, header, config),
+            )
+            if header in num_formats and isinstance(cell.value, (int, float)):
+                cell.number_format = num_formats[header]
+    tpl.close()
 
 
 def _export_with_template(
