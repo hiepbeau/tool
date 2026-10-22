@@ -67,34 +67,65 @@ def _init_session() -> None:
 # Shared UI helpers
 # ---------------------------------------------------------------------------
 
-def _status_badge(value: int) -> None:
-    """Render a colored status pill: green OK, yellow Needs review."""
-    if value == 0:
-        label, bg, fg, border = "OK", "#E7F6ED", "#1B5E20", "#A5D6A7"
+def _overview_card(label: str, value: str, sublabel: str, *, accent: bool = False) -> str:
+    """HTML card for Calculation Overview metrics."""
+    value_color = "#2E7D4F" if accent else "#101828"
+    return f"""
+    <div style="
+        background:#FFFFFF;
+        border:1px solid #E4E7EC;
+        border-radius:12px;
+        padding:1rem 1.1rem;
+        box-shadow:0 1px 2px rgba(16,24,40,0.04);
+        min-height:108px;
+    ">
+      <div style="font-size:0.82rem;font-weight:600;color:#667085;margin-bottom:0.45rem;">
+        {label}
+      </div>
+      <div style="font-size:1.85rem;font-weight:700;line-height:1.15;color:{value_color};">
+        {value}
+      </div>
+      <div style="font-size:0.8rem;color:#98A2B3;margin-top:0.4rem;">
+        {sublabel}
+      </div>
+    </div>
+    """
+
+
+def _quality_row(title: str, detail: str, count: int, *, last: bool = False) -> str:
+    """One Data Quality row with OK / issue styling."""
+    if count == 0:
+        icon_bg, icon_fg, icon = "#E7F6ED", "#2E7D4F", "✓"
+        badge_bg, badge_fg = "#E7F6ED", "#2E7D4F"
     else:
-        label, bg, fg, border = "Needs review", "#FFF8E1", "#E65100", "#FFE082"
-    st.html(
-        f"""
+        icon_bg, icon_fg, icon = "#FFF4E5", "#E65100", "!"
+        badge_bg, badge_fg = "#FFF4E5", "#E65100"
+    border = "none" if last else "1px solid #F2F4F7"
+    return f"""
+    <div style="
+        display:flex;align-items:center;justify-content:space-between;gap:0.85rem;
+        padding:0.85rem 0.25rem;border-bottom:{border};
+    ">
+      <div style="display:flex;align-items:center;gap:0.75rem;min-width:0;">
         <div style="
-            display:inline-block;
-            margin-top:0.15rem;
-            padding:0.2rem 0.65rem;
-            border-radius:999px;
-            font-size:0.78rem;
-            font-weight:700;
-            letter-spacing:0.02em;
-            background:{bg};
-            color:{fg};
-            border:1px solid {border};
-        ">{label}</div>
-        """
-    )
-
-
-def _metric_with_status(label: str, value: int) -> None:
-    """Metric plus highlighted OK / Needs review status."""
-    st.metric(label, value)
-    _status_badge(value)
+          width:28px;height:28px;border-radius:50%;flex:0 0 auto;
+          background:{icon_bg};color:{icon_fg};
+          display:flex;align-items:center;justify-content:center;
+          font-weight:700;font-size:0.9rem;
+        ">{icon}</div>
+        <div style="min-width:0;">
+          <div style="font-size:0.92rem;font-weight:700;color:#101828;">{title}</div>
+          <div style="font-size:0.8rem;color:#667085;margin-top:0.1rem;">{detail}</div>
+        </div>
+      </div>
+      <div style="
+        width:28px;height:28px;border-radius:50%;flex:0 0 auto;
+        background:{badge_bg};color:{badge_fg};
+        display:flex;align-items:center;justify-content:center;
+        font-weight:700;font-size:0.85rem;
+      ">{count}</div>
+    </div>
+    """
 
 
 def render_summary_panels(
@@ -104,49 +135,92 @@ def render_summary_panels(
     *,
     title_prefix: str = "",
     show_effort_totals: bool = True,
+    eyebrow: str = "Current report",
 ) -> None:
-    """Render Match overview + Calculation summary using native Streamlit metrics."""
+    """
+    Render Calculation Overview + Data Quality panels.
+
+    Replaces the older Match overview / Calculation summary layout with the
+    cleaner card design used in Results.
+    """
+    _ = (title_prefix, show_effort_totals, lookup)  # call-site compatibility
     s = result.summary
-    dup_keys = len(lookup.duplicate_identical_keys) if lookup is not None else 0
-    amb_keys = len(lookup.ambiguous_keys) if lookup is not None else 0
-    unmatched = s.unmatched_task_keys
+    missing = s.missing_standard
+    ambiguous = s.ambiguous_standard
     invalid_effort = s.invalid_actual_effort + s.zero_actual_effort
-    match_title = f"{title_prefix}Match overview".strip()
-    calc_title = f"{title_prefix}Calculation summary".strip()
+    issue_count = missing + ambiguous + invalid_effort
 
-    st.subheader(match_title)
-    m1, m2, m3 = st.columns(3)
-    with m1:
-        _metric_with_status("Duplicate identical standard keys", dup_keys)
-    with m2:
-        _metric_with_status("Ambiguous standard keys", amb_keys)
-    with m3:
-        _metric_with_status("Unmatched task keys", unmatched)
+    actual_md = round(s.total_actual_effort, config.effort_decimals)
+    standard_md = round(s.total_standard_effort, config.effort_decimals)
+    total = s.total_tasks
+    valid = s.valid_productivity_tasks
 
-    st.subheader(calc_title)
-    st.caption("Coverage")
-    c1, c2 = st.columns(2)
-    c1.metric("Total source tasks", s.total_tasks)
-    c2.metric("Valid productivity tasks", s.valid_productivity_tasks)
+    if missing == 0:
+        missing_detail = "All tasks matched to a standard"
+    else:
+        missing_detail = f"{missing} task{'s' if missing != 1 else ''} cannot be matched to a standard"
 
-    st.caption("Validation flags")
-    v1, v2, v3 = st.columns(3)
-    with v1:
-        _metric_with_status("Missing standard", s.missing_standard)
-    with v2:
-        _metric_with_status("Ambiguous standard", s.ambiguous_standard)
-    with v3:
-        _metric_with_status("Invalid actual effort", invalid_effort)
+    if ambiguous == 0:
+        ambiguous_detail = "No duplicate ambiguity detected"
+    else:
+        ambiguous_detail = (
+            f"{ambiguous} task{'s' if ambiguous != 1 else ''} have conflicting standard mappings"
+        )
 
-    if show_effort_totals:
-        actual_md = round(s.total_actual_effort, config.effort_decimals)
-        standard_md = round(s.total_standard_effort, config.effort_decimals)
-        st.caption("Effort totals")
-        e1, e2 = st.columns(2)
-        with e1:
-            st.info(f"**Total actual effort (valid)**  \n### {actual_md} MD")
-        with e2:
-            st.success(f"**Total standard effort (valid)**  \n### {standard_md} MD")
+    if invalid_effort == 0:
+        invalid_detail = "No invalid effort values detected"
+    else:
+        invalid_detail = (
+            f"{invalid_effort} task{'s' if invalid_effort != 1 else ''} have invalid or zero actual effort"
+        )
+
+    if issue_count == 0:
+        issues_badge = (
+            '<span style="background:#E7F6ED;color:#2E7D4F;border:1px solid #A5D6A7;'
+            'border-radius:999px;padding:0.2rem 0.65rem;font-size:0.75rem;font-weight:700;">'
+            "0 issues</span>"
+        )
+    else:
+        issues_badge = (
+            '<span style="background:#FFF4E5;color:#E65100;border:1px solid #FFCC80;'
+            'border-radius:999px;padding:0.2rem 0.65rem;font-size:0.75rem;font-weight:700;">'
+            f"{issue_count} issue{'s' if issue_count != 1 else ''}</span>"
+        )
+
+    quality_rows = (
+        _quality_row("Missing standard", missing_detail, missing)
+        + _quality_row("Ambiguous standards", ambiguous_detail, ambiguous)
+        + _quality_row("Invalid actual effort", invalid_detail, invalid_effort, last=True)
+    )
+
+    st.html(
+        f"""
+        <div style="margin:0.25rem 0 1rem 0;">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.75rem;">
+            <div style="font-size:1.15rem;font-weight:700;color:#101828;">Calculation Overview</div>
+            <div style="font-size:0.8rem;color:#98A2B3;">{eyebrow}</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+            {_overview_card("Total source tasks", str(total), "Tasks loaded")}
+            {_overview_card("Valid productivity tasks", str(valid), f"{valid} of {total} tasks", accent=True)}
+            {_overview_card("Actual effort", f"{actual_md} MD", "Valid tasks only")}
+            {_overview_card("Standard effort", f"{standard_md} MD", "Valid matched tasks", accent=True)}
+          </div>
+
+          <div style="
+            margin-top:1rem;background:#FFFFFF;border:1px solid #E4E7EC;
+            border-radius:12px;padding:0.85rem 1rem 0.35rem 1rem;
+            box-shadow:0 1px 2px rgba(16,24,40,0.04);
+          ">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem;">
+              <div style="font-size:1rem;font-weight:700;color:#101828;">Data Quality</div>
+              {issues_badge}
+            </div>
+            {quality_rows}
+          </div>
+        </div>
+        """
+    )
 
 
 def _clear_browse_filter_state() -> None:
@@ -285,10 +359,23 @@ def _build_comparison_frame(filtered: pd.DataFrame) -> pd.DataFrame:
     return compare
 
 
+_STANDARD_EFFORT_STYLE = "background-color: #C8E6C9; color: #1B5E20; font-weight: 600"
+
+
 def _highlight_effort_diff(row: pd.Series) -> list:
+    """Highlight EffortManday vs Standard Effort; always mark Standard Effort in green."""
     styles = [""] * len(row)
-    if "EffortManday" not in row.index or "Standard Effort" not in row.index:
+    cols = list(row.index)
+
+    if "Standard Effort" in cols:
+        std_idx = cols.index("Standard Effort")
+        standard = row["Standard Effort"]
+        if standard is not None and not (isinstance(standard, float) and pd.isna(standard)):
+            styles[std_idx] = _STANDARD_EFFORT_STYLE
+
+    if "EffortManday" not in cols or "Standard Effort" not in cols:
         return styles
+
     actual = row["EffortManday"]
     standard = row["Standard Effort"]
     if (
@@ -298,11 +385,24 @@ def _highlight_effort_diff(row: pd.Series) -> list:
         or (isinstance(standard, float) and pd.isna(standard))
     ):
         return styles
-    idx = list(row.index).index("EffortManday")
+
+    effort_idx = cols.index("EffortManday")
     if float(actual) == float(standard):
-        styles[idx] = "background-color: #C8E6C9; font-weight: 600"
+        styles[effort_idx] = "background-color: #C8E6C9; font-weight: 600"
     else:
-        styles[idx] = "background-color: #FFE566; font-weight: 600"
+        styles[effort_idx] = "background-color: #FFE566; font-weight: 600"
+    return styles
+
+
+def _highlight_standard_effort(row: pd.Series) -> list:
+    """Always highlight Standard Effort in green on calculated results."""
+    styles = [""] * len(row)
+    if "Standard Effort" not in row.index:
+        return styles
+    standard = row["Standard Effort"]
+    if standard is None or (isinstance(standard, float) and pd.isna(standard)):
+        return styles
+    styles[list(row.index).index("Standard Effort")] = _STANDARD_EFFORT_STYLE
     return styles
 
 
@@ -356,6 +456,7 @@ def _render_comparison_and_detail(filtered: pd.DataFrame, config: AppConfig) -> 
         st.subheader("Task details")
         st.caption(
             "Compare source effort against the standard, then review calculated productivity. "
+            "Standard Effort is highlighted in green. "
             "EffortManday: green = matches Standard Effort, yellow = differs."
         )
 
@@ -384,7 +485,18 @@ def _render_comparison_and_detail(filtered: pd.DataFrame, config: AppConfig) -> 
             if display.empty:
                 st.info("No rows match the current filters.")
             else:
-                st.dataframe(display, use_container_width=True, hide_index=True)
+                effort_fmt = f"{{:.{config.effort_decimals}f}}"
+                formatters = {}
+                if "Total Effort (MD)" in display.columns:
+                    formatters["Total Effort (MD)"] = effort_fmt
+                if "Standard Effort" in display.columns:
+                    formatters["Standard Effort"] = effort_fmt
+                if "Effort For Specialist" in display.columns:
+                    formatters["Effort For Specialist"] = effort_fmt
+                styled = display.style.apply(_highlight_standard_effort, axis=1)
+                if formatters:
+                    styled = styled.format(formatters, na_rep="")
+                st.dataframe(styled, use_container_width=True, hide_index=True)
 
 
 # ---------------------------------------------------------------------------
