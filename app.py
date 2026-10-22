@@ -67,11 +67,34 @@ def _init_session() -> None:
 # Shared UI helpers
 # ---------------------------------------------------------------------------
 
-def _status_delta(value: int) -> Optional[str]:
-    """Show a short status hint under issue metrics (0 = OK)."""
+def _status_badge(value: int) -> None:
+    """Render a colored status pill: green OK, yellow Needs review."""
     if value == 0:
-        return "OK"
-    return "Needs review"
+        label, bg, fg, border = "OK", "#E7F6ED", "#1B5E20", "#A5D6A7"
+    else:
+        label, bg, fg, border = "Needs review", "#FFF8E1", "#E65100", "#FFE082"
+    st.html(
+        f"""
+        <div style="
+            display:inline-block;
+            margin-top:0.15rem;
+            padding:0.2rem 0.65rem;
+            border-radius:999px;
+            font-size:0.78rem;
+            font-weight:700;
+            letter-spacing:0.02em;
+            background:{bg};
+            color:{fg};
+            border:1px solid {border};
+        ">{label}</div>
+        """
+    )
+
+
+def _metric_with_status(label: str, value: int) -> None:
+    """Metric plus highlighted OK / Needs review status."""
+    st.metric(label, value)
+    _status_badge(value)
 
 
 def render_summary_panels(
@@ -93,9 +116,12 @@ def render_summary_panels(
 
     st.subheader(match_title)
     m1, m2, m3 = st.columns(3)
-    m1.metric("Duplicate identical standard keys", dup_keys, delta=_status_delta(dup_keys), delta_color="off")
-    m2.metric("Ambiguous standard keys", amb_keys, delta=_status_delta(amb_keys), delta_color="off")
-    m3.metric("Unmatched task keys", unmatched, delta=_status_delta(unmatched), delta_color="off")
+    with m1:
+        _metric_with_status("Duplicate identical standard keys", dup_keys)
+    with m2:
+        _metric_with_status("Ambiguous standard keys", amb_keys)
+    with m3:
+        _metric_with_status("Unmatched task keys", unmatched)
 
     st.subheader(calc_title)
     st.caption("Coverage")
@@ -105,9 +131,12 @@ def render_summary_panels(
 
     st.caption("Validation flags")
     v1, v2, v3 = st.columns(3)
-    v1.metric("Missing standard", s.missing_standard, delta=_status_delta(s.missing_standard), delta_color="off")
-    v2.metric("Ambiguous standard", s.ambiguous_standard, delta=_status_delta(s.ambiguous_standard), delta_color="off")
-    v3.metric("Invalid actual effort", invalid_effort, delta=_status_delta(invalid_effort), delta_color="off")
+    with v1:
+        _metric_with_status("Missing standard", s.missing_standard)
+    with v2:
+        _metric_with_status("Ambiguous standard", s.ambiguous_standard)
+    with v3:
+        _metric_with_status("Invalid actual effort", invalid_effort)
 
     if show_effort_totals:
         actual_md = round(s.total_actual_effort, config.effort_decimals)
